@@ -885,9 +885,30 @@ exclude_path() {
 if [ "$KIND" != secondmate ]; then
   case "$HARNESS" in
     claude*)
+      # ECC capability pack (config/crew-capability-pack): when set, a Claude crewmate
+      # is provisioned with the pack's GateGuard fact-forcing gate as a PreToolUse hook,
+      # alongside the turn-end Stop hook below. Opt-in and backward-compatible: unset =>
+      # GG_PRETOOL is empty and settings.local.json is byte-identical to before. Scoped
+      # here to Claude ship/scout spawns only - the enclosing case is Claude-specific and
+      # the whole branch is skipped for secondmates. The gate honors ECC_GATEGUARD=off
+      # (checked inside gateguard-run.js) as a kill switch.
+      GG_PRETOOL=""
+      CAP_PACK=$(cat "$CONFIG/crew-capability-pack" 2>/dev/null || true)
+      if [ -n "$CAP_PACK" ] && [ -f "$CAP_PACK/gateguard-run.js" ]; then
+        CAP_NODE=$(command -v node 2>/dev/null || true)
+        if [ -z "$CAP_NODE" ] && [ -x "$HOME/.local/node/bin/node" ]; then
+          CAP_NODE="$HOME/.local/node/bin/node"
+        fi
+        if [ -n "$CAP_NODE" ]; then
+          GG_CMD="GATEGUARD_EXEMPT_GLOBS='node_modules/**,.git/**' $CAP_NODE $CAP_PACK/gateguard-run.js"
+          GG_PRETOOL=",\"PreToolUse\":[{\"matcher\":\"Edit|Write|MultiEdit\",\"hooks\":[{\"type\":\"command\",\"command\":\"$GG_CMD\"}]},{\"matcher\":\"Bash\",\"hooks\":[{\"type\":\"command\",\"command\":\"$GG_CMD\"}]}]"
+        else
+          echo "warning: config/crew-capability-pack is set but no node binary was found (checked PATH and \$HOME/.local/node/bin/node); GateGuard hook not wired for $ID" >&2
+        fi
+      fi
       mkdir -p "$WT/.claude"
       cat > "$WT/.claude/settings.local.json" <<EOF
-{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"touch '$TURNEND'"}]}]}}
+{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"touch '$TURNEND'"}]}]$GG_PRETOOL}}
 EOF
       exclude_path '.claude/settings.local.json'
       ;;
