@@ -23,6 +23,7 @@ The shared no-mistakes gate refusal used by `fm-spawn.sh`, `fm-send.sh`, and `fm
 | `fm-turnend-guard-grok.sh` | Grok Stop-hook adapter for the primary turn-end guard                              |
 | `fm-arm-pretool-check.sh` | Stable PreToolUse transport for the watcher-arm command policy (docs/arm-pretool-check.md) |
 | `fm-arm-command-policy.mjs` | Semantic owner of the watcher-arm PreToolUse policy (docs/arm-pretool-check.md)   |
+| `fm-hook-flags.sh`       | Enable/disable gate for OPTIONAL, non-safety-critical hooks via `FM_HOOK_PROFILE`/`FM_DISABLED_HOOKS`; not wired into any existing hook |
 | `fm-supervision-instructions.sh` | Render the session-start primary-harness supervision block or the one-line repair instruction |
 | `fm-home-seed.sh`        | Transactionally provision a secondmate home and maintain `data/secondmates.md`       |
 | `fm-spawn.sh`            | Spawn crewmates, scouts, `id=repo` batches, and secondmates on the resolved harness and runtime backend |
