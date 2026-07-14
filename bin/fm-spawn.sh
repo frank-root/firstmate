@@ -900,8 +900,9 @@ if [ "$KIND" != secondmate ]; then
           CAP_NODE="$HOME/.local/node/bin/node"
         fi
         if [ -n "$CAP_NODE" ]; then
-          GG_CMD="GATEGUARD_EXEMPT_GLOBS='node_modules/**,.git/**' $CAP_NODE $CAP_PACK/gateguard-run.js"
-          GG_PRETOOL=",\"PreToolUse\":[{\"matcher\":\"Edit|Write|MultiEdit\",\"hooks\":[{\"type\":\"command\",\"command\":\"$GG_CMD\"}]},{\"matcher\":\"Bash\",\"hooks\":[{\"type\":\"command\",\"command\":\"$GG_CMD\"}]}]"
+          GG_CMD="GATEGUARD_EXEMPT_GLOBS='node_modules/**,.git/**' $(shell_quote "$CAP_NODE") $(shell_quote "$CAP_PACK/gateguard-run.js")"
+          GG_CMD_JSON=$(json_escape "$GG_CMD")
+          GG_PRETOOL=",\"PreToolUse\":[{\"matcher\":\"Edit|Write|MultiEdit\",\"hooks\":[{\"type\":\"command\",\"command\":\"$GG_CMD_JSON\"}]},{\"matcher\":\"Bash\",\"hooks\":[{\"type\":\"command\",\"command\":\"$GG_CMD_JSON\"}]}]"
         else
           echo "warning: config/crew-capability-pack is set but no node binary was found (checked PATH and \$HOME/.local/node/bin/node); GateGuard hook not wired for $ID" >&2
         fi

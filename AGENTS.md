@@ -222,7 +222,7 @@ An explicit per-spawn harness still overrides either kind, and every secondmate 
 
 `config/secondmate-harness` can also pin a model/effort for the secondmate agent in one line (`<harness> [<model>] [<effort>]`); format, accessors, and inheritance exceptions live in `secondmate-provisioning` (load before creating/seeding/launching/recovering a secondmate).
 
-`config/crew-dispatch.json`, `config/crew-harness`, and `config/backlog-backend` are inherited into every secondmate home; `config/secondmate-harness` is not, because secondmates never spawn secondmates.
+`config/crew-dispatch.json`, `config/crew-harness`, `config/backlog-backend`, and `config/crew-capability-pack` are inherited into every secondmate home; `config/secondmate-harness` is not, because secondmates never spawn secondmates.
 `secondmate-provisioning` owns the propagation timing, mechanism, the literal-file inheritance nuance, and `bin/fm-config-push.sh`.
 
 Each adapter splits into mechanics and knowledge.
