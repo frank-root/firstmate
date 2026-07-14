@@ -126,7 +126,7 @@ bin/fm-spawn.sh <id> --secondmate
 
 Use the recorded `home=` in meta.
 If meta is missing but `data/secondmates.md` still registers the secondmate, respawn from the registry entry and its persistent on-disk home.
-Respawn re-resolves the secondmate harness from current config, uses the same guarded pre-launch sync, and re-propagates inheritable config, so recovered secondmates converge to the primary firstmate version and local dispatch, crew-harness, and backlog-backend settings whenever their home can be cleanly fast-forwarded.
+Respawn re-resolves the secondmate harness from current config, uses the same guarded pre-launch sync, and re-propagates inheritable config, so recovered secondmates converge to the primary firstmate version and local dispatch, crew-harness, backlog-backend, and capability-pack settings whenever their home can be cleanly fast-forwarded.
 If the secondmate is already running and only inherited config changed, prefer `bin/fm-config-push.sh` over respawning.
 
 Do not reconstruct a secondmate's whole tree from the main home.
