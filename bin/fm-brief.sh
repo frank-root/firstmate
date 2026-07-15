@@ -220,6 +220,20 @@ EOF
 )
 fi
 
+# ECC capability pack: prepend the prompt-defense preamble to crewmate briefs when
+# config/crew-capability-pack ships one. Empty (a true no-op line, no stray blank
+# section) when the pack is unset - the padding blank lines live inside the value
+# itself so the heredoc below never authors extra blank lines around it.
+DEFENSE_SECTION=""
+FM_CAP_PACK=$(cat "${FM_CONFIG_OVERRIDE:-$FM_HOME/config}/crew-capability-pack" 2>/dev/null || true)
+if [ -n "$FM_CAP_PACK" ] && [ -f "$FM_CAP_PACK/defense-preamble.md" ]; then
+  # Command substitution strips ALL trailing newlines, including the padding
+  # newline printf just added, so append a sentinel and strip it back off
+  # instead of losing the blank line before "# Setup".
+  DEFENSE_SECTION=$(printf '\n%s\n.' "$(cat "$FM_CAP_PACK/defense-preamble.md")")
+  DEFENSE_SECTION=${DEFENSE_SECTION%.}
+fi
+
 if [ "$KIND" = scout ]; then
 cat > "$BRIEF" <<EOF
 You are a crewmate: an autonomous worker agent managed by firstmate. Work on your own; do not wait for a human.
@@ -228,7 +242,7 @@ You are a crewmate: an autonomous worker agent managed by firstmate. Work on you
 {TASK}
 
 $HERDR_SECTION
-
+$DEFENSE_SECTION
 # Setup
 You are in a disposable git worktree of $REPO, at a detached HEAD on a clean default branch.
 This is a SCOUT task: the deliverable is a written report, not a PR.
@@ -331,7 +345,7 @@ You are a crewmate: an autonomous worker agent managed by firstmate. Work on you
 {TASK}
 
 $HERDR_SECTION
-
+$DEFENSE_SECTION
 # Setup
 You are in a disposable git worktree of $REPO, at a detached HEAD on a clean default branch.
 

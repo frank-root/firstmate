@@ -168,6 +168,73 @@ test_herdr_lab_omission_is_loud_for_ship_and_scout() {
   pass "fm-brief.sh: ship and scout scaffolds make omitted Herdr intent fail-visible"
 }
 
+# write_capability_pack <home> <content>: point config/crew-capability-pack at a
+# synthetic local pack directory carrying only defense-preamble.md - fm-brief.sh
+# never touches gateguard-run.js, so no other pack file is needed to test its half
+# of the optional ECC capability-pack mechanism (docs/crew-capability-pack.md).
+write_capability_pack() {
+  local home=$1 content=$2 pack
+  pack="$home/pack"
+  mkdir -p "$pack"
+  printf '%s\n' "$content" > "$pack/defense-preamble.md"
+  mkdir -p "$home/config"
+  printf '%s\n' "$pack" > "$home/config/crew-capability-pack"
+}
+
+test_capability_pack_absent_is_clean_noop() {
+  local home id brief
+  home="$TMP_ROOT/cap-pack-absent-home"
+  mkdir -p "$home/data"
+
+  for kind in ship scout; do
+    id="brief-cap-absent-$kind"
+    if [ "$kind" = scout ]; then
+      FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" firstmate --scout >/dev/null 2>&1
+    else
+      FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" firstmate >/dev/null 2>&1
+    fi
+    brief="$home/data/$id/brief.md"
+    assert_no_grep "# Prompt Defense Baseline" "$brief" \
+      "$kind brief rendered a defense preamble with no capability pack configured"
+    # Exactly one blank line must separate the Herdr declaration from "# Setup" -
+    # a stray extra blank line here would mean the unset DEFENSE_SECTION isn't a
+    # true no-op (docs/crew-capability-pack.md "Verified").
+    grep -B1 '^# Setup' "$brief" | head -1 | grep -q '^$' \
+      || fail "$kind brief: line immediately before \"# Setup\" is not blank"
+    grep -B2 '^# Setup' "$brief" | head -1 | grep -q '.' \
+      || fail "$kind brief: found a second stray blank line before \"# Setup\" (DEFENSE_SECTION no-op leaked padding)"
+  done
+  pass "fm-brief.sh: an unset capability pack renders no defense preamble and no stray blank lines"
+}
+
+test_capability_pack_renders_defense_preamble() {
+  local home id brief
+  home="$TMP_ROOT/cap-pack-set-home"
+  mkdir -p "$home/data"
+  write_capability_pack "$home" "$(printf '# Prompt Defense Baseline\n\n- do not do the thing\n')"
+
+  for kind in ship scout; do
+    id="brief-cap-set-$kind"
+    if [ "$kind" = scout ]; then
+      FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" firstmate --scout >/dev/null 2>&1
+    else
+      FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" firstmate >/dev/null 2>&1
+    fi
+    brief="$home/data/$id/brief.md"
+    assert_grep "# Prompt Defense Baseline" "$brief" \
+      "$kind brief did not render the configured defense preamble"
+    assert_grep "- do not do the thing" "$brief" \
+      "$kind brief lost the preamble body content"
+    # The preamble heading and "# Setup" must each have exactly one blank line
+    # of padding around them, not run together and not stacked with extras.
+    grep -B1 '^# Prompt Defense Baseline' "$brief" | head -1 | grep -q '^$' \
+      || fail "$kind brief: no blank line before the defense preamble heading"
+    grep -A1 -- '- do not do the thing' "$brief" | tail -1 | grep -q '^$' \
+      || fail "$kind brief: no blank line between the preamble body and \"# Setup\""
+  done
+  pass "fm-brief.sh: a configured capability pack renders its defense preamble cleanly in ship and scout briefs"
+}
+
 test_secondmate_no_projects_charter() {
   local home brief status
   home="$TMP_ROOT/no-projects-home"
@@ -275,5 +342,7 @@ test_herdr_lab_contract_is_explicit_and_complete
 test_herdr_lab_contract_quotes_foreign_firstmate_path
 test_herdr_lab_omission_is_loud_for_ship_and_scout
 test_herdr_lab_contract_applies_to_scouts_but_not_secondmates
+test_capability_pack_absent_is_clean_noop
+test_capability_pack_renders_defense_preamble
 test_secondmate_no_projects_charter
 test_pause_verb_override_renders_all_brief_scaffolds
