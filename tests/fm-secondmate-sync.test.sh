@@ -44,8 +44,7 @@ new_world() {
   local name=$1 w
   w="$TMP_ROOT/$name"
   mkdir -p "$w/home/state" "$w/home/data"
-  # Fresh watcher beacon keeps fm-guard quiet for the spawn path.
-  touch "$w/home/state/.last-watcher-beat"
+  fm_test_mark_live_watcher "$w/home/state" "$w/home" || fail "could not seed a live watcher fixture"
 
   git init -q -b main "$w/main"
   # Mirror the real repo: the gitignored operational dirs never dirty a worktree,

@@ -62,7 +62,7 @@ REAL_GIT_FOR_TEST=$(command -v git)
 export REAL_GIT_FOR_TEST
 
 # Build a fresh sandbox for one test case. Sets up:
-#   $CASE/state/        - firstmate state dir (with a fresh watcher beacon)
+#   $CASE/state/        - firstmate state dir (with a live watcher fixture)
 #   $CASE/fakebin/      - mocks for treehouse, tmux (PATH-prepended by caller)
 #   $CASE/origin.git/   - bare upstream repo (so the project clone has origin)
 #   $CASE/project/      - clone of origin; acts as the firstmate project dir
@@ -122,8 +122,7 @@ SH
   # Add a worktree on a fresh task branch; that branch is where the crewmate commits.
   git -C "$case_dir/project" worktree add -q -b fm/task-x1 "$case_dir/wt" main
 
-  # Fresh watcher beacon so fm-guard stays quiet.
-  touch "$case_dir/state/.last-watcher-beat"
+  fm_test_mark_live_watcher "$case_dir/state" "$ROOT" || fail "could not seed a live watcher fixture"
 
   printf '%s\n' "$case_dir"
 }

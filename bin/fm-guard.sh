@@ -5,14 +5,13 @@
 # First, always warn if the firstmate primary checkout (FM_ROOT) is on a named
 # non-default branch, because that means firstmate-on-itself work landed in the
 # primary instead of an isolated worktree.
-# Then, if any task is in flight (a state/<id>.meta exists) and the watcher's
-# liveness beacon (state/.last-watcher-beat, touched every poll cycle) is
-# missing or older than FM_GUARD_GRACE seconds, prints a loud, clearly delimited
-# banner so the agent cannot skim past it in the tool output of whatever it was
-# doing - the one channel every harness has. Normal wake handling (watcher
-# briefly down between a wake and the next supervision resume) stays inside the
-# grace window and stays silent. Always exits 0: the guard warns, it never
-# blocks.
+# Then, if any task is in flight (a state/<id>.meta exists) and no live,
+# identity-matched watcher has a fresh liveness beacon, prints a loud, clearly
+# delimited banner so the agent cannot skim past it in the tool output of
+# whatever it was doing - the one channel every harness has. Normal wake handling
+# (watcher briefly down between a wake and the next supervision resume) stays
+# silent only when a live watcher is confirmed. Always exits 0: the guard warns,
+# it never blocks.
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -20,6 +19,7 @@ FM_ROOT="${FM_ROOT_OVERRIDE:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
 STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
 CONFIG="${FM_CONFIG_OVERRIDE:-$FM_HOME/config}"
+WATCH="$SCRIPT_DIR/fm-watch.sh"
 GRACE=${FM_GUARD_GRACE:-300}
 queue_pending=false
 READ_ONLY=${FM_GUARD_READ_ONLY:-0}
@@ -60,21 +60,20 @@ if [ -n "$tangle_branch" ]; then
   } >&2
 fi
 
-# Compute in-flight count and watcher-beacon freshness via the shared
-# grace-based predicate (bin/fm-supervision-lib.sh). Only act with tasks in
-# flight; count them so the banner can say how much is riding on an absent
-# watcher.
+# Compute in-flight count and watcher-beacon freshness for banner detail. The
+# decision below uses the shared live identity-matched watcher predicate from
+# bin/fm-wake-lib.sh so a fresh leftover beacon cannot mask a dead watcher.
 fm_supervision_status "$STATE" "$GRACE"
 in_flight=$FM_SUP_IN_FLIGHT
-watcher_fresh=$FM_SUP_WATCHER_FRESH
 beacon_desc=$FM_SUP_BEACON_DESC
 [ "$in_flight" -eq 0 ] && exit 0
 
 [ -s "$FM_WAKE_QUEUE" ] && queue_pending=true
 
-# No fresh watcher with tasks in flight is the dangerous state: emit a prominent,
-# bordered banner FIRST so it reads as an alarm, not a buried stderr line.
-if [ "$watcher_fresh" = false ]; then
+# No live identity-matched watcher with tasks in flight is the dangerous state:
+# emit a prominent, bordered banner FIRST so it reads as an alarm, not a buried
+# stderr line.
+if ! fm_watcher_healthy "$STATE" "$WATCH" "$GRACE" "$FM_HOME"; then
   afk=0
   [ -e "$STATE/.afk" ] && afk=1
   queue_arg=0
@@ -91,7 +90,7 @@ if [ "$watcher_fresh" = false ]; then
   {
     printf '●%s\n' "$rule"
     printf '●  WATCHER DOWN - SUPERVISION IS OFF\n'
-    printf '●  %s task(s) in flight, but no watcher has a fresh beacon (last beat: %s, grace %ss).\n' "$in_flight" "$beacon_desc" "$GRACE"
+    printf '●  %s task(s) in flight, but no live identity-matched watcher has a fresh beacon (last beat: %s, grace %ss).\n' "$in_flight" "$beacon_desc" "$GRACE"
     if [ "$READ_ONLY" -eq 1 ]; then
       printf '●  This read-only session should report the lapse, not repair it.\n'
     else

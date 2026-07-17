@@ -100,8 +100,10 @@ test_guard_warnings() {
   #       title, in-flight count, beacon age, fix command), the queued-wakes
   #       warning follows it, and the guidance is re-arm-after-drain (never the
   #       old conflicting "restart NOW first").
-  #   (2) a fresh watcher and an empty queue: total silence.
-  local dir state err first banner_line queue_line
+  #   (2) a fresh beacon with no live lock, or with a dead lock: the no-watcher
+  #       banner still fires immediately.
+  #   (3) a live identity-matched watcher and an empty queue: total silence.
+  local dir state err first banner_line queue_line live identity dead_pid
   dir=$(make_case guard)
   state="$dir/state"
   err="$dir/guard.err"
@@ -141,17 +143,52 @@ test_guard_warnings() {
   FM_ROOT_OVERRIDE="$dir" FM_STATE_OVERRIDE="$state" FM_GUARD_GRACE=1 "$ROOT/bin/fm-guard.sh" 2> "$err" >/dev/null || fail "guard failed"
   grep -F "source '$dir/config/x-mode.env' first" "$err" >/dev/null || fail "guard repair line did not source the X-mode cadence config"
 
-  # (2) fresh watcher, empty queue -> silence.
+  # (2a) fresh beacon with no live lock -> warning.
   dir=$(make_case guard-fresh)
   state="$dir/state"
   err="$dir/guard.err"
   printf 'project=x\n' > "$state/task.meta"
   touch "$state/.last-watcher-beat"
-  # Non-git FM_ROOT keeps the worktree-tangle check inert so "fresh watcher ->
-  # total silence" stays a pure assertion about watcher state.
   FM_ROOT_OVERRIDE="$dir" FM_STATE_OVERRIDE="$state" FM_GUARD_GRACE=300 "$ROOT/bin/fm-guard.sh" 2> "$err" >/dev/null || fail "guard failed"
+  grep -F 'no live identity-matched watcher has a fresh beacon' "$err" >/dev/null \
+    || fail "guard did not warn when a fresh beacon had no live watcher lock"
+
+  # (2b) fresh beacon with a dead identity-matched-looking lock -> warning.
+  dir=$(make_case guard-dead-lock)
+  state="$dir/state"
+  err="$dir/guard.err"
+  printf 'project=x\n' > "$state/task.meta"
+  touch "$state/.last-watcher-beat"
+  dead_pid=999999
+  while kill -0 "$dead_pid" 2>/dev/null; do dead_pid=$((dead_pid + 1)); done
+  mkdir "$state/.watch.lock"
+  printf '%s\n' "$dead_pid" > "$state/.watch.lock/pid"
+  printf '%s\n' "$dir" > "$state/.watch.lock/fm-home"
+  printf '%s\n' "$WATCH" > "$state/.watch.lock/watcher-path"
+  printf '%s\n' "dead watcher identity" > "$state/.watch.lock/pid-identity"
+  FM_ROOT_OVERRIDE="$dir" FM_STATE_OVERRIDE="$state" FM_HOME="$dir" FM_GUARD_GRACE=300 "$ROOT/bin/fm-guard.sh" 2> "$err" >/dev/null || fail "guard failed"
+  grep -F 'no live identity-matched watcher has a fresh beacon' "$err" >/dev/null \
+    || fail "guard did not warn on a dead watcher lock with a fresh beacon"
+
+  # (3) live identity-matched watcher, fresh beacon, empty queue -> silence.
+  dir=$(make_case guard-healthy)
+  state="$dir/state"
+  err="$dir/guard.err"
+  printf 'project=x\n' > "$state/task.meta"
+  touch "$state/.last-watcher-beat"
+  sleep 300 &
+  live=$!
+  identity=$(FM_STATE_OVERRIDE="$state" bash -c '. "$1"; fm_pid_identity "$2"' _ "$LIB" "$live") || fail "could not identify live watcher fixture pid"
+  mkdir "$state/.watch.lock"
+  printf '%s\n' "$live" > "$state/.watch.lock/pid"
+  printf '%s\n' "$dir" > "$state/.watch.lock/fm-home"
+  printf '%s\n' "$WATCH" > "$state/.watch.lock/watcher-path"
+  printf '%s\n' "$identity" > "$state/.watch.lock/pid-identity"
+  FM_ROOT_OVERRIDE="$dir" FM_STATE_OVERRIDE="$state" FM_HOME="$dir" FM_GUARD_GRACE=300 "$ROOT/bin/fm-guard.sh" 2> "$err" >/dev/null || fail "guard failed"
+  kill "$live" 2>/dev/null || true
+  wait "$live" 2>/dev/null || true
   [ ! -s "$err" ] || fail "guard warned with a fresh watcher and no queued wakes: $(cat "$err")"
-  pass "guard banner leads when down with pending wakes (re-arm-after-drain) and stays silent when fresh"
+  pass "guard banner leads when down with pending wakes, rejects fresh dead beacons, and stays silent when live"
 }
 
 test_lock_single_winner_under_concurrency() {

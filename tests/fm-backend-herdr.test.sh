@@ -217,6 +217,25 @@ test_version_check_refuses_missing_herdr() {
   pass "fm_backend_herdr_version_check: refuses loudly when herdr is not installed"
 }
 
+test_events_capable_schema_check_has_no_broken_pipe_noise() {
+  local dir log resp fb payload out status
+  dir="$TMP_ROOT/events-capable-no-pipe"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
+  payload=$(awk 'BEGIN { for (i = 0; i < 40000; i++) printf "x" }')
+  printf '{"client":{"version":"0.7.3","protocol":16}}\n' > "$resp/1.out"
+  printf '{"methods":["events.subscribe","pane.agent_status_changed","%s"]}\n' "$payload" > "$resp/2.out"
+  printf '{"client":{"version":"0.7.3","protocol":16}}\n' > "$resp/3.out"
+  printf '{"methods":["events.subscribe","%s"]}\n' "$payload" > "$resp/4.out"
+  fb=$(make_herdr_fakebin "$dir")
+  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_HERDR_SCRIPT_STATUS=1 \
+    bash -c 'trap "" PIPE; . "$0/bin/backends/herdr.sh"; fm_backend_herdr_events_capable sess; printf "present=%s\n" "$?"; fm_backend_herdr_events_capable sess; printf "absent=%s\n" "$?"' "$ROOT" 2>&1 )
+  status=$?
+  [ "$status" -eq 0 ] || fail "events capability probe harness failed with status $status: $out"
+  assert_contains "$out" "present=0" "events capability should pass when both schema markers are present"
+  assert_contains "$out" "absent=1" "events capability should fail when a schema marker is absent"
+  assert_not_contains "$out" "printf: write error" "events capability probe leaked broken-pipe noise"
+  pass "fm_backend_herdr_events_capable: schema marker checks avoid broken-pipe noise under ignored SIGPIPE"
+}
+
 # --- workspace_label: per-firstmate-HOME resolution (P3, herdr-sm-spaces-k4) -
 
 test_workspace_label_primary_home_no_marker() {
@@ -2043,6 +2062,7 @@ test_wait_transition_clean_timeout_returns_1() {
 test_version_check_accepts_current_protocol
 test_version_check_refuses_old_protocol
 test_version_check_refuses_missing_herdr
+test_events_capable_schema_check_has_no_broken_pipe_noise
 test_workspace_label_primary_home_no_marker
 test_workspace_label_secondmate_home_uses_marker_id
 test_workspace_label_secondmate_marker_trims_whitespace
