@@ -40,6 +40,19 @@ JSON
 
 profiles='[{"harness":"claude","model":"claude-sonnet-5","effort":"high"},{"harness":"codex","model":"gpt-5.5","effort":"high"}]'
 
+# The pinned BASE_PATH drops non-system bin dirs, so jq (a hard dependency of
+# fm-dispatch-select.sh, not the subject under test) must be re-exposed wherever
+# PATH is pinned - the same pattern as tests/fm-bootstrap.test.sh's add_real_jq.
+add_real_jq() {
+  local fakebin=$1 real_jq
+  real_jq=$(command -v jq 2>/dev/null) || fail "jq is required for dispatch selection tests"
+  cat > "$fakebin/jq" <<SH
+#!/usr/bin/env bash
+exec '$real_jq' "\$@"
+SH
+  chmod +x "$fakebin/jq"
+}
+
 test_higher_min_vendor_wins() {
   local quota out
   quota="$TMP_ROOT/higher.json"
@@ -63,6 +76,7 @@ test_exact_tie_uses_first_profile() {
 test_quota_missing_falls_back_to_first() {
   local fakebin out err status
   fakebin=$(fm_fakebin "$TMP_ROOT/missing")
+  add_real_jq "$fakebin"
   out=$(PATH="$fakebin:$BASE_PATH" "$ROOT/bin/fm-dispatch-select.sh" --select quota-balanced "$profiles" 2>"$TMP_ROOT/missing.err")
   status=$?
   err=$(cat "$TMP_ROOT/missing.err")
@@ -76,6 +90,7 @@ test_quota_missing_falls_back_to_first() {
 test_quota_error_falls_back_to_first() {
   local fakebin out err status
   fakebin=$(fm_fakebin "$TMP_ROOT/error")
+  add_real_jq "$fakebin"
   cat > "$fakebin/quota-axi" <<'SH'
 #!/usr/bin/env bash
 exit 42
@@ -153,6 +168,7 @@ JSON
 test_backward_compatible_first_selection() {
   local fakebin marker out single array_rule
   fakebin=$(fm_fakebin "$TMP_ROOT/no-call")
+  add_real_jq "$fakebin"
   marker="$TMP_ROOT/quota-called"
   cat > "$fakebin/quota-axi" <<SH
 #!/usr/bin/env bash

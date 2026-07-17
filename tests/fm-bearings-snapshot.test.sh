@@ -481,6 +481,11 @@ test_secondmate_and_child_bounds_are_disclosed() {
   done
   printf '\n## Queued\n\n## Done\n' >> "$mate/data/backlog.md"
   fakebin=$(make_fakebin "$home")
+  # Warm the freshly created stubs: macOS assesses each new executable on its
+  # first exec (~2s per file), which can push a secondmate probe past its
+  # bounded window and corrupt the counts asserted below.
+  "$fakebin/no-mistakes" >/dev/null 2>&1 || true
+  "$fakebin/tmux" >/dev/null 2>&1 || true
   canonical=$(PATH="$fakebin:$PATH" FM_HOME="$home" FM_SNAPSHOT_NOW=2026-07-11T18:00:00Z \
     FM_SNAPSHOT_SECONDMATES=2 FM_SNAPSHOT_SECONDMATE_CHILDREN=2 "$ROOT/bin/fm-fleet-snapshot.sh" --json)
   printf '%s' "$canonical" | jq -e '
@@ -930,6 +935,11 @@ test_perl_fallback_bounds_github_call() {
   for cmd in bash dirname basename jq date sed git grep tail cut tr head sort wc perl sleep cat find; do
     ln -s "$(command -v "$cmd")" "$toolbin/$cmd"
   done
+  # Warm the freshly created stubs: macOS assesses each new executable on its
+  # first exec (~2s per file); pay that outside the timed window below.
+  "$fakebin/no-mistakes" >/dev/null 2>&1 || true
+  "$fakebin/tmux" >/dev/null 2>&1 || true
+  NET_LOG=/dev/null "$fakebin/gh" >/dev/null 2>&1 || true
   started=$(date +%s)
   json=$(PATH="$fakebin:$toolbin" FM_HOME="$home" FM_BEARINGS_NOW=2026-07-11T18:00:00Z \
     FM_BEARINGS_PR_TIMEOUT=1 NET_LOG="$home/net.log" FAKE_GH_SLEEP=1 "$BEARINGS" --include-prs --json)
