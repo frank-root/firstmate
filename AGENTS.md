@@ -605,10 +605,10 @@ This exception is narrow: ordinary crewmates still trip stale detection when the
 
 **Watcher liveness is guarded, not just disciplined.**
 Resuming the emitted supervision protocol is the last action of every wake-handling turn - but the protocol no longer relies on remembering that.
-The supervision scripts and `bin/fm-wake-drain.sh` call `bin/fm-guard.sh`, which prints a prominent bordered banner when tasks are in flight but queued wakes are pending or the watcher's liveness beacon is missing or stale; `docs/architecture.md` ("Event-driven supervision") owns the beacon and grace mechanics.
+The supervision scripts and `bin/fm-wake-drain.sh` call `bin/fm-guard.sh`, which prints a prominent bordered banner when tasks are in flight but queued wakes are pending or no live identity-matched watcher has a fresh liveness beacon; `docs/architecture.md` ("Event-driven supervision") owns the beacon and grace mechanics.
 The banner is only a supervision warning: the guarded operation still runs, and `fm-send`'s banner says explicitly that the requested message WILL still be sent.
 If a guard warning says queued wakes are pending, drain them before doing anything else.
-If a guard warning says watcher liveness is stale, drain any queued wakes and then resume the emitted supervision protocol.
+If a guard warning says watcher liveness is unhealthy, drain any queued wakes and then resume the emitted supervision protocol.
 
 `fm-guard.sh` carries a second, independent alarm in the same bordered style: the **worktree-tangle** guard.
 If a crewmate sent to work firstmate-on-itself branches or commits in the primary checkout instead of its own isolated worktree, the primary is stranded on a feature branch (the failure this guards against); the guard names the offending branch and prints the non-destructive restore (`git -C <root> checkout <default>`), so the tangle surfaces on the very next fleet action.

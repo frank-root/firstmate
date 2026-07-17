@@ -687,7 +687,7 @@ new_world() {
   local name=$1 dispatch_ignore=${2:-yes} w
   w="$TMP_ROOT/$name"
   mkdir -p "$w/home/state" "$w/home/data" "$w/home/config"
-  touch "$w/home/state/.last-watcher-beat"
+  fm_test_mark_live_watcher "$w/home/state" "$w/home" || fail "could not seed a live watcher fixture"
   git init -q -b main "$w/main"
   {
     printf 'projects/\nstate/\ndata/\n.no-mistakes/\n'

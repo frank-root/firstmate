@@ -1,13 +1,13 @@
 # shellcheck shell=bash
-# Shared "supervision missing" predicate.
+# Shared in-flight-work and watcher-beacon-age status.
 # Usage: . bin/fm-supervision-lib.sh
 #
-# True exactly when a firstmate home has in-flight work (a state/<id>.meta
-# exists) but no watcher has a fresh liveness beacon (state/.last-watcher-beat,
-# touched every poll cycle, within the grace window). bin/fm-guard.sh uses this
-# grace-based warning predicate directly; bin/fm-turnend-guard.sh uses the status
-# fields here for its banner but performs its end-of-turn block decision with the
-# live watcher lock check in bin/fm-wake-lib.sh.
+# Tracks whether a firstmate home has in-flight work and whether the watcher's
+# liveness beacon (state/.last-watcher-beat, touched every poll cycle) is fresh.
+# Guard scripts use these status fields for banner detail ONLY, then decide health
+# with the live identity-matched watcher check (fm_watcher_healthy) in
+# bin/fm-wake-lib.sh: a fresh beacon alone cannot prove a watcher is alive,
+# because a dead watcher leaves its last beacon behind.
 
 # Portable mtime; Linux stat lacks -f, macOS stat lacks -c.
 fm_sup_stat_mtime() {
@@ -25,7 +25,8 @@ fm_sup_stat_mtime() {
 #   FM_SUP_BEACON_DESC    human-readable beacon age, for banners ("never" if absent)
 #   FM_SUP_QUEUE_PENDING  true/false - state/.wake-queue has unread records
 # grace-seconds defaults to $FM_GUARD_GRACE, then 300, matching fm-guard.sh.
-# Always returns 0; callers read the vars, or use fm_supervision_unhealthy below.
+# Always returns 0; callers read the vars. FM_SUP_WATCHER_FRESH is beacon age
+# alone - it is banner forensics, never a liveness verdict (see below).
 fm_supervision_status() {
   local state=$1 grace=${2:-${FM_GUARD_GRACE:-300}} meta beat m age
   FM_SUP_IN_FLIGHT=0
@@ -57,8 +58,14 @@ fm_supervision_status() {
 }
 
 # fm_supervision_unhealthy <state-dir> [grace-seconds]
-# Exit 0 (true) exactly in the dangerous state: in-flight work exists and no
-# watcher has a fresh beacon. Exit 1 (false) otherwise, including zero in-flight.
+# Exit 0 (true) when in-flight work exists and no watcher has a fresh beacon.
+# Exit 1 (false) otherwise, including zero in-flight.
+#
+# Retained deliberately, but NO production caller uses it and none should: it is
+# beacon-age-only, so a dead watcher's leftover fresh beacon reads as healthy -
+# exactly the masking bug fm_watcher_healthy exists to close. Guards must call
+# fm_watcher_healthy instead. Kept as the covered definition of beacon-freshness
+# semantics that fm_supervision_status's callers depend on (tests/fm-turnend-guard.test.sh).
 fm_supervision_unhealthy() {
   fm_supervision_status "$@"
   [ "$FM_SUP_IN_FLIGHT" -gt 0 ] && [ "$FM_SUP_WATCHER_FRESH" = false ]

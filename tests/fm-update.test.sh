@@ -36,8 +36,7 @@ new_world() {
   local name=$1 w
   w="$TMP_ROOT/$name"
   mkdir -p "$w/home/state" "$w/home/data"
-  # Fresh watcher beacon keeps fm-guard quiet.
-  touch "$w/home/state/.last-watcher-beat"
+  fm_test_mark_live_watcher "$w/home/state" "$w/home" || fail "could not seed a live watcher fixture"
 
   git init -q --bare "$w/origin.git"
   git -C "$w/origin.git" symbolic-ref HEAD refs/heads/main

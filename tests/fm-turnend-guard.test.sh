@@ -536,6 +536,10 @@ test_hook_runs_fast() {
   local dir start elapsed_s
   dir=$(make_primary_dir "$TMP_ROOT/hook-timing")
   : > "$dir/state/task1.meta"
+  # Warm-up run: macOS assesses each freshly created executable on its first
+  # exec (~2s per file for the copied helper scripts), which is one-time OS
+  # overhead, not hook latency. Measure the steady state.
+  run_hook "$dir" false >/dev/null
   start=$SECONDS
   run_hook "$dir" false >/dev/null
   elapsed_s=$((SECONDS - start))

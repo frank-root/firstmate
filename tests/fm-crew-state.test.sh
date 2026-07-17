@@ -1022,10 +1022,18 @@ test_no_timeout_uses_perl_bound() {
   : > "$calls_file"
   cat > "$d/fakebin/no-mistakes" <<'SH'
 #!/usr/bin/env bash
+[ "${FM_NM_WARM_ONLY:-0}" = 1 ] && exit 0
 printf '%s\n' "$*" >> "${FM_FAKE_NM_CALLS:-/dev/null}"
 while :; do :; done
 SH
   chmod +x "$d/fakebin/no-mistakes"
+  # Warm-up execs: macOS assesses each freshly created executable on its first
+  # exec (~2s per file), which would eat the whole 1s perl alarm below before
+  # the stub could even record its call, and inflate the elapsed bound with the
+  # fake tmux's own first exec. The warm guard exits before recording/spinning;
+  # the fake tmux without arguments is a fast no-op.
+  FM_NM_WARM_ONLY=1 "$d/fakebin/no-mistakes" >/dev/null 2>&1 || true
+  "$d/fakebin/tmux" >/dev/null 2>&1 || true
   toolbin=$(make_no_timeout_toolbin "$d")
   fm_write_meta "$d/state/feat-timeout.meta" "window=fm:fm-feat-timeout" "worktree=$d/wt" "kind=ship"
   FM_FAKE_BUSY=1
