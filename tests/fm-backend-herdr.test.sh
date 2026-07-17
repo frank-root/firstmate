@@ -168,6 +168,23 @@ fake_herdr_set_agent_status() {  # <state-file> <pane_id> <status>
   jq --arg p "$pane" --arg s "$status" '.agent_status[$p] = $s' "$state" > "$tmp" && mv "$tmp" "$state"
 }
 
+# write_herdr_schema_fixture: a canned `api schema --json` response shaped like
+# the real ~220KB read (see bin/backends/herdr.sh's events_capable notes): the
+# method markers sit on an early line, followed by far more than one pipe buffer
+# (64 KiB max) of filler. Both properties carry the broken-pipe regression - a
+# reader that stops at the marker must leave enough unread bulk behind to make a
+# writer on the other end of a pipe fail. A single-line or sub-64-KiB fixture
+# cannot reproduce it: the reader has to reach end-of-line before it can match,
+# and a writer never blocks on a payload that fits in the buffer.
+write_herdr_schema_fixture() {  # <file> <methods-json>
+  local file=$1 methods=$2
+  {
+    printf '{\n  "methods": [%s],\n  "defs": [\n' "$methods"
+    awk 'BEGIN { for (i = 0; i < 4000; i++) printf "    {\"name\": \"filler_%d\", \"params\": \"%s\"},\n", i, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }'
+    printf '    {"name": "tail"}\n  ]\n}\n'
+  } > "$file"
+}
+
 # herdr_case <name> -> sets up FM_HERDR_LOG/FM_HERDR_RESPONSES/fb for one test,
 # registers cleanup-free tmp dirs under TMP_ROOT.
 herdr_env() {  # <name>
@@ -218,13 +235,14 @@ test_version_check_refuses_missing_herdr() {
 }
 
 test_events_capable_schema_check_has_no_broken_pipe_noise() {
-  local dir log resp fb payload out status
+  local dir log resp fb out status size
   dir="$TMP_ROOT/events-capable-no-pipe"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
-  payload=$(awk 'BEGIN { for (i = 0; i < 40000; i++) printf "x" }')
   printf '{"client":{"version":"0.7.3","protocol":16}}\n' > "$resp/1.out"
-  printf '{"methods":["events.subscribe","pane.agent_status_changed","%s"]}\n' "$payload" > "$resp/2.out"
+  write_herdr_schema_fixture "$resp/2.out" '"events.subscribe", "pane.agent_status_changed"'
   printf '{"client":{"version":"0.7.3","protocol":16}}\n' > "$resp/3.out"
-  printf '{"methods":["events.subscribe","%s"]}\n' "$payload" > "$resp/4.out"
+  write_herdr_schema_fixture "$resp/4.out" '"events.subscribe"'
+  size=$(wc -c < "$resp/2.out")
+  [ "$size" -gt 65536 ] || fail "schema fixture is $size bytes: at or under one pipe buffer it cannot catch a pipelined marker check"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_HERDR_SCRIPT_STATUS=1 \
     bash -c 'trap "" PIPE; . "$0/bin/backends/herdr.sh"; fm_backend_herdr_events_capable sess; printf "present=%s\n" "$?"; fm_backend_herdr_events_capable sess; printf "absent=%s\n" "$?"' "$ROOT" 2>&1 )

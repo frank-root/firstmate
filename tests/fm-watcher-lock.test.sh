@@ -50,10 +50,7 @@ test_stale_watch_lock_reclaimed() {
   state="$dir/state"
   fakebin="$dir/fakebin"
   out="$dir/watch.out"
-  dead_pid=999999
-  while kill -0 "$dead_pid" 2>/dev/null; do
-    dead_pid=$((dead_pid + 1))
-  done
+  dead_pid=$(dead_pid)
   mkdir "$state/.watch.lock"
   printf '%s\n' "$dead_pid" > "$state/.watch.lock/pid"
   PATH="$fakebin:$PATH" FM_STATE_OVERRIDE="$state" FM_POLL=5 FM_SIGNAL_GRACE=1 FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
@@ -103,7 +100,7 @@ test_guard_warnings() {
   #   (2) a fresh beacon with no live lock, or with a dead lock: the no-watcher
   #       banner still fires immediately.
   #   (3) a live identity-matched watcher and an empty queue: total silence.
-  local dir state err first banner_line queue_line live identity dead_pid
+  local dir state err first banner_line queue_line dead_pid
   dir=$(make_case guard)
   state="$dir/state"
   err="$dir/guard.err"
@@ -159,8 +156,7 @@ test_guard_warnings() {
   err="$dir/guard.err"
   printf 'project=x\n' > "$state/task.meta"
   touch "$state/.last-watcher-beat"
-  dead_pid=999999
-  while kill -0 "$dead_pid" 2>/dev/null; do dead_pid=$((dead_pid + 1)); done
+  dead_pid=$(dead_pid)
   mkdir "$state/.watch.lock"
   printf '%s\n' "$dead_pid" > "$state/.watch.lock/pid"
   printf '%s\n' "$dir" > "$state/.watch.lock/fm-home"
@@ -175,19 +171,9 @@ test_guard_warnings() {
   state="$dir/state"
   err="$dir/guard.err"
   printf 'project=x\n' > "$state/task.meta"
-  touch "$state/.last-watcher-beat"
-  sleep 300 &
-  live=$!
-  identity=$(FM_STATE_OVERRIDE="$state" bash -c '. "$1"; fm_pid_identity "$2"' _ "$LIB" "$live") || fail "could not identify live watcher fixture pid"
-  mkdir "$state/.watch.lock"
-  printf '%s\n' "$live" > "$state/.watch.lock/pid"
-  printf '%s\n' "$dir" > "$state/.watch.lock/fm-home"
-  printf '%s\n' "$WATCH" > "$state/.watch.lock/watcher-path"
-  printf '%s\n' "$identity" > "$state/.watch.lock/pid-identity"
+  fm_test_mark_live_watcher "$state" "$dir" || fail "could not seed a live watcher fixture"
   FM_ROOT_OVERRIDE="$dir" FM_STATE_OVERRIDE="$state" FM_HOME="$dir" FM_GUARD_GRACE=300 "$ROOT/bin/fm-guard.sh" 2> "$err" >/dev/null || fail "guard failed"
-  kill "$live" 2>/dev/null || true
-  wait "$live" 2>/dev/null || true
-  [ ! -s "$err" ] || fail "guard warned with a fresh watcher and no queued wakes: $(cat "$err")"
+  [ ! -s "$err" ] || fail "guard warned with a live watcher and no queued wakes: $(cat "$err")"
   pass "guard banner leads when down with pending wakes, rejects fresh dead beacons, and stays silent when live"
 }
 
